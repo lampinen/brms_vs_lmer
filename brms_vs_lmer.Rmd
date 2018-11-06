@@ -1,0 +1,113 @@
+---
+title: "BRMS vs lmer comparison"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(brms)
+```
+
+```{r}
+logistic = function(x) {
+  return(1/(1+exp(-x)))
+}
+```
+
+```{r}
+model_data = data.frame()
+```
+
+# making some data
+
+
+Predictors
+```{r}
+set.seed(0)
+num_subjects = 100
+noise_and_RE_sd = 0.5
+subject_ids = 1:num_subjects
+subject_random_intercepts = rnorm(length(subject_ids), 0, noise_and_RE_sd)
+subject_p1_random_slopes = rnorm(length(subject_ids), 0, noise_and_RE_sd)
+trials = 1:20
+condition = c("A", "B") # between subjects
+parameter_2_values = c("U", "V")
+
+data = expand.grid(trial=trials, subject_id=subject_ids) %>%
+  mutate(condition=cut(subject_id, c(1, num_subjects/2, num_subjects), labels=condition, include.lowest=T),
+         parameter_1=runif(n(), -1, 1),
+         parameter_2=sample(parameter_2_values, n(), replace=T),
+         random_intercept=subject_random_intercepts[subject_id],
+         p1_random_slope=subject_p1_random_slopes[subject_id],
+         noise=rnorm(n(), 0, noise_and_RE_sd))
+
+intercept = 0
+beta_p1 = 1
+beta_cond= 1
+beta_p1_x_cond = -1
+beta_p2_is_V = 1
+beta_p1_x_p2 = -1
+betas = c(intercept, beta_p1, beta_cond, beta_p2_is_V, beta_p1_x_cond, beta_p1_x_p2)
+beta_names = c("(Intercept)", "parameter_1", "conditionB", "parameter_2V", "parameter_1:conditionB", "parameter_1:parameter_2V")
+```
+
+
+DV:
+```{r}
+data = data %>%
+  mutate(
+    logit = ((beta_p1 + p1_random_slope)*parameter_1 + beta_p2_is_V * (parameter_2 == "V") + beta_cond * (condition == "B") + beta_p1_x_cond * (parameter_1 * (condition == "B")) + beta_p1_x_p2 * (parameter_1 * (parameter_2 == "V"))),
+    p = logistic(logit)) %>%
+  rowwise() %>%
+  mutate(outcome=rbinom(1, 1, p))
+```
+
+# lmer
+
+```{r}
+lmer_model = glmer(outcome ~ parameter_1 * (condition + parameter_2) + (1 + parameter_1 | subject_id), data, family=binomial)
+temp = summary(lmer_model)
+lmer_failed = !is.null(temp$optinfo$conv$lme4$code) 
+estimates = temp$coefficients[, 1]
+fixed_diffs = estimates - betas
+fixed_CI_l = temp$coefficients[, 1] - 1.96*temp$coefficients[, 2]
+fixed_CI_h = temp$coefficients[, 1] + 1.96*temp$coefficients[, 2]
+fixed_contained_in_95CI = (fixed_CI_l < betas) & ( betas < fixed_CI_h) 
+
+this_data = data.frame(names=beta_names, type="lmer", true_value=betas, estimate=estimates, fixed_diff=fixed_diffs, fixed_contained, convergence_failed=lmer_failed)
+model_data = bind_rows(model_data, this_data)
+
+
+lmer_model_simplified = glmer(outcome ~ parameter_1 * (condition + parameter_2) + (1 | subject_id), data, family=binomial)
+temp = summary(lmer_model_simplified)
+lmer_simplified_failed = !is.null(temp$optinfo$conv$lme4$code) 
+estimates = temp$coefficients[, 1]
+fixed_diffs = estimates - betas
+fixed_CI_l = temp$coefficients[, 1] - 1.96*temp$coefficients[, 2]
+fixed_CI_h = temp$coefficients[, 1] + 1.96*temp$coefficients[, 2]
+fixed_contained_in_95CI = (fixed_CI_l < betas) & ( betas < fixed_CI_h) 
+
+this_data = data.frame(names=beta_names, type="lmer_no_slopes", true_value=betas, estimate=estimates, fixed_diff=fixed_diffs, fixed_contained, convergence_failed=lmer_simplified_failed)
+model_data = bind_rows(model_data, this_data)
+```
+
+# brms
+
+```{r, warning=F}
+brm_model = brm(outcome ~ parameter_1 * (condition + parameter_2) + (1 + parameter_1 | subject_id), data, family=bernoulli)
+```
+```{r}
+temp = summary(brm_model)
+
+estimates = temp$fixed[, 1]
+fixed_diffs = estimates - betas
+fixed_contained_in_95CI = (temp$fixed[, 3] < betas) & ( betas < temp$fixed[, 4]) 
+
+this_data = data.frame(names=beta_names, type="brms", true_value=betas, estimate=estimates, fixed_diff=fixed_diffs, fixed_contained, convergence_failed=F)
+model_data = bind_rows(model_data, this_data)
+## excluding random effects for now, fixed are more comparable across packages
+# random_diffs = temp$random$subject_id[1:2, 1] - noise_and_RE_sd
+# random_contained_in_95CI = (temp$random$subject_id[1:2, 3] < noise_and_RE_sd) & (noise_and_RE_sd < temp$random$subject_id[1:2, 4])
+```
+
