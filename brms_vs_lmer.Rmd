@@ -12,7 +12,7 @@ library(brms)
 ```
 
 ```{r}
-num_runs = 2
+num_runs = 30
 num_subjects = 100
 ```
 
