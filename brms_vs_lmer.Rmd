@@ -9,10 +9,11 @@ output:
 library(tidyverse)
 library(lme4)
 library(brms)
+library(Hmisc)
 ```
 
 ```{r}
-num_runs = 30
+num_runs = 2
 num_subjects = 100
 ```
 
@@ -26,10 +27,10 @@ logistic = function(x) {
 
 
 Predictors
-```{r, echo=F, warning=T, error=T}
+```{r, results=F, messages=F, warning=F, error=T}
 
 model_data = data.frame()
-for (run in 1:num_runs) {
+for (run in 2:num_runs) {
   set.seed(run)
   noise_and_RE_sd = 0.5
   subject_ids = 1:num_subjects
@@ -66,22 +67,23 @@ for (run in 1:num_runs) {
     mutate(outcome=rbinom(1, 1, p))
   
   # lmer
-  
-  lmer_model = glmer(outcome ~ parameter_1 * (condition + parameter_2) + (1 + parameter_1 | subject_id), data, family=binomial)
+  this_warnings = c()
+  withCallingHandlers({lmer_model = glmer(outcome ~ parameter_1 * (condition + parameter_2) + (1 + parameter_1 | subject_id), data, family=binomial)}, warning=function(w) {this_warnings <<- c(this_warnings, w)})
+  lmer_failed = length(this_warnings) > 0
   temp = summary(lmer_model)
-  lmer_failed = !is.null(temp$optinfo$conv$lme4$code) 
+  this_warning_string = paste(this_warnings, collapse="&&&&&&")
   estimates = temp$coefficients[, 1]
   fixed_diffs = estimates - betas
   fixed_CI_l = temp$coefficients[, 1] - 1.96*temp$coefficients[, 2]
   fixed_CI_h = temp$coefficients[, 1] + 1.96*temp$coefficients[, 2]
   fixed_contained_in_95CI = (fixed_CI_l < betas) & ( betas < fixed_CI_h) 
   
-  this_data = data.frame(run=run, names=beta_names, type="lmer", true_value=betas, estimate=estimates, fixed_diff=fixed_diffs, fixed_contained=fixed_contained_in_95CI, convergence_failed=lmer_failed)
+  this_data = data.frame(run=run, names=beta_names, type="lmer", true_value=betas, estimate=estimates, fixed_diff=fixed_diffs, fixed_contained=fixed_contained_in_95CI, convergence_failed=lmer_failed, warnings=this_warning_string)
   model_data = bind_rows(model_data, this_data)
   
-  
-  lmer_model_simplified = glmer(outcome ~ parameter_1 * (condition + parameter_2) + (1 | subject_id), data, family=binomial)
-  temp = summary(lmer_model_simplified)
+  this_warnings = c()
+  withCallingHandlers({lmer_model_simplified = glmer(outcome ~ parameter_1 * (condition + parameter_2) + (1 | subject_id), data, family=binomial)}, warning=function(w) {this_warnings <<- c(this_warnings, w)})
+  lmer_simplified_failed = length(this_warnings) > 0
   lmer_simplified_failed = !is.null(temp$optinfo$conv$lme4$code) 
   estimates = temp$coefficients[, 1]
   fixed_diffs = estimates - betas
@@ -89,24 +91,31 @@ for (run in 1:num_runs) {
   fixed_CI_h = temp$coefficients[, 1] + 1.96*temp$coefficients[, 2]
   fixed_contained_in_95CI = (fixed_CI_l < betas) & ( betas < fixed_CI_h) 
   
-  this_data = data.frame(run=run, names=beta_names, type="lmer_no_slopes", true_value=betas, estimate=estimates, fixed_diff=fixed_diffs, fixed_contained=fixed_contained_in_95CI, convergence_failed=lmer_simplified_failed)
+  this_data = data.frame(run=run, names=beta_names, type="lmer_no_slopes", true_value=betas, estimate=estimates, fixed_diff=fixed_diffs, fixed_contained=fixed_contained_in_95CI, convergence_failed=lmer_simplified_failed, warnings=this_warning_string)
   model_data = bind_rows(model_data, this_data)
   
   # brms
   
-  brm_model = brm(outcome ~ parameter_1 * (condition + parameter_2) + (1 + parameter_1 | subject_id), data, family=bernoulli)
+  this_warnings = c()
+  withCallingHandlers({brm_model = brm(outcome ~ parameter_1 * (condition + parameter_2) + (1 + parameter_1 | subject_id), data, family=bernoulli)}, warning=function(w) {this_warnings <<- c(this_warnings, w)})
+  brms_failed = length(this_warnings) > 0
+  
   temp = summary(brm_model)
   
   estimates = temp$fixed[, 1]
   fixed_diffs = estimates - betas
   fixed_contained_in_95CI = (temp$fixed[, 3] < betas) & ( betas < temp$fixed[, 4]) 
   
-  this_data = data.frame(run=run, names=beta_names, type="brms", true_value=betas, estimate=estimates, fixed_diff=fixed_diffs, fixed_contained=fixed_contained_in_95CI, convergence_failed=F)
+  this_data = data.frame(run=run, names=beta_names, type="brms", true_value=betas, estimate=estimates, fixed_diff=fixed_diffs, fixed_contained=fixed_contained_in_95CI, convergence_failed=brms_failed, warnings=this_warning_string)
   model_data = bind_rows(model_data, this_data)
   ## excluding random effects for now, fixed are more comparable across packages
   # random_diffs = temp$random$subject_id[1:2, 1] - noise_and_RE_sd
   # random_contained_in_95CI = (temp$random$subject_id[1:2, 3] < noise_and_RE_sd) & (noise_and_RE_sd < temp$random$subject_id[1:2, 4])
 }
+```
+
+```{r}
+write_csv(model_data, "model_results.csv")
 ```
 
 # visualizing
@@ -119,13 +128,22 @@ theme_set(theme_bw() +
 ```{r}
 ggplot(data=model_data, aes(x=names, y=abs(fixed_diff), fill=type)) +
   geom_bar(stat="summary", fun.y="mean", position="dodge") +
+  geom_errorbar(stat="summary", fun.data=mean_cl_normal, width=0.5, position=position_dodge(width=0.9)) +
   scale_fill_brewer(palette="Set2")+ 
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
 ```{r}
+ggplot(data=model_data, aes(x=fixed_diff, y=type, color=type)) +
+  geom_point(position=position_jitter(width=0)) +
+  scale_color_brewer(palette="Set2") + 
+  facet_wrap(. ~ names)
+```
+
+```{r}
 ggplot(data=model_data, aes(x=names, y=1*fixed_contained, fill=type)) +
   geom_bar(stat="summary", fun.y="mean", position="dodge") +
+  geom_errorbar(stat="summary", fun.data=mean_cl_normal, width=0.5, position=position_dodge(width=0.9)) +
   scale_fill_brewer(palette="Set2") +
   labs(x="Parameter", y="True value in 95%-C(r)I") + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
