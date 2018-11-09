@@ -15,6 +15,8 @@ library(Hmisc)
 ```{r}
 num_runs = 50
 num_subjects = 100
+parameter_range = 3
+noise_and_RE_sd = 0.5
 ```
 
 ```{r}
@@ -30,7 +32,6 @@ logistic = function(x) {
 model_data = data.frame()
 for (run in 1:num_runs) {
   set.seed(run)
-  noise_and_RE_sd = 0.5
   subject_ids = 1:num_subjects
   subject_random_intercepts = rnorm(length(subject_ids), 0, noise_and_RE_sd)
   subject_p1_random_slopes = rnorm(length(subject_ids), 0, noise_and_RE_sd)
@@ -46,12 +47,12 @@ for (run in 1:num_runs) {
            p1_random_slope=subject_p1_random_slopes[subject_id],
            noise=rnorm(n(), 0, noise_and_RE_sd))
   
-  intercept = rnorm(1, 0, 2)
-  beta_p1 = rnorm(1, 0, 2)
-  beta_cond= rnorm(1, 0, 2)
-  beta_p1_x_cond = rnorm(1, 0, 2)
-  beta_p2_is_V = rnorm(1, 0, 2)
-  beta_p1_x_p2 = rnorm(1, 0, 2)
+  intercept = rnorm(1, -parameter_range, parameter_range)
+  beta_p1 = rnorm(1, -parameter_range, parameter_range)
+  beta_cond= rnorm(1, -parameter_range, parameter_range)
+  beta_p1_x_cond = rnorm(1, -parameter_range, parameter_range)
+  beta_pparameter_range_is_V = rnorm(1, -parameter_range, parameter_range)
+  beta_p1_x_pparameter_range = rnorm(1, -parameter_range, parameter_range)
   betas = c(intercept, beta_p1, beta_cond, beta_p2_is_V, beta_p1_x_cond, beta_p1_x_p2)
   beta_names = c("(Intercept)", "parameter_1", "conditionB", "parameter_2V", "parameter_1:conditionB", "parameter_1:parameter_2V")
   
@@ -126,7 +127,19 @@ theme_set(theme_bw() +
             theme(panel.grid=element_blank()))
 ```
 
-## how biased are the eastimates?
+## does brms converge more often?
+
+
+```{r}
+ggplot(data=model_data, aes(x=type, y=1*convergence_failed, fill=type)) +
+  geom_bar(stat="summary", fun.y="mean", position="dodge") +
+  geom_errorbar(stat="summary", fun.data=mean_cl_normal, width=0.5, position=position_dodge(width=0.9)) +
+  scale_fill_brewer(palette="Set2")+   
+  labs(y="Convergence failures (%)")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## how biased are the estimates?
 
 ```{r}
 ggplot(data=model_data, aes(x=names, y=abs(fixed_diff), fill=type)) +
@@ -156,6 +169,20 @@ ggplot(data=model_data, aes(x=fixed_diff, y=type, color=type)) +
   facet_wrap(. ~ names)
 ```
 
+## Are estimate errors correlated?
+
+They should be, but to what extent?
+
+```{r}
+ggplot(data=model_data %>%
+         filter(type != "lmer_no_slopes") %>%
+         select(run, names, type, fixed_diff) %>%
+         spread(type, fixed_diff), aes(x=lmer, y=brms)) +
+  geom_point() +
+  facet_wrap(. ~ names)
+```
+
+
 ## Are the CIs biased?
 
 ```{r}
@@ -175,14 +202,5 @@ ggplot(data=model_data, aes(x=names, y=1*fixed_contained, fill=type)) +
   labs(x="Parameter", y="True value in 95%-C(r)I") + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   facet_wrap(.~convergence_failed)
-```
-
-```{r}
-ggplot(data=model_data %>%
-         filter(type != "lmer_no_slopes") %>%
-         select(run, names, type, fixed_diff) %>%
-         spread(type, fixed_diff), aes(x=lmer, y=brms)) +
-  geom_point() +
-  facet_wrap(. ~ names)
 ```
 
