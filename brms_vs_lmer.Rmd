@@ -157,7 +157,7 @@ ggplot(data=model_data, aes(x=names, y=abs(fixed_diff), fill=type)) +
   geom_errorbar(stat="summary", fun.data=mean_cl_normal, width=0.5, position=position_dodge(width=0.9)) +
   scale_fill_brewer(palette="Set2")+ 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
-  facet_wrap(.~ convergence_failed)
+  facet_grid(.~ convergence_failed, scales="free")
 ```
 
 Individual results:
@@ -167,6 +167,13 @@ ggplot(data=model_data, aes(x=fixed_diff, y=type, color=type)) +
   geom_point(position=position_jitter(width=0)) +
   scale_color_brewer(palette="Set2") + 
   facet_wrap(. ~ names)
+```
+
+```{r}
+ggplot(data=model_data, aes(x=fixed_diff, y=type, color=type)) +
+  geom_point(position=position_jitter(width=0)) +
+  scale_color_brewer(palette="Set2") + 
+  facet_wrap(convergence_failed ~ names, scales="free")
 ```
 
 ## Are estimate errors correlated?
