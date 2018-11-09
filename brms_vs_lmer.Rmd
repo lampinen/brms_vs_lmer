@@ -15,7 +15,7 @@ library(Hmisc)
 ```{r}
 num_runs = 50
 num_subjects = 100
-parameter_range = 3
+parameter_range = 2
 noise_and_RE_sd = 0.5
 ```
 
@@ -27,7 +27,7 @@ logistic = function(x) {
 
 # making some data and running models on it
 
-```{r, results=F, messages=F, warning=F, error=T}
+```{r, results=F, messages=F, warning=F}
 
 model_data = data.frame()
 for (run in 1:num_runs) {
@@ -47,12 +47,13 @@ for (run in 1:num_runs) {
            p1_random_slope=subject_p1_random_slopes[subject_id],
            noise=rnorm(n(), 0, noise_and_RE_sd))
   
-  intercept = rnorm(1, -parameter_range, parameter_range)
-  beta_p1 = rnorm(1, -parameter_range, parameter_range)
-  beta_cond= rnorm(1, -parameter_range, parameter_range)
-  beta_p1_x_cond = rnorm(1, -parameter_range, parameter_range)
-  beta_pparameter_range_is_V = rnorm(1, -parameter_range, parameter_range)
-  beta_p1_x_pparameter_range = rnorm(1, -parameter_range, parameter_range)
+  intercept = runif(1, -parameter_range, parameter_range)
+  beta_p1 = runif(1, -parameter_range, parameter_range)
+  beta_p2_is_V = runif(1, -parameter_range, parameter_range)
+  beta_cond= runif(1, -parameter_range, parameter_range)
+  beta_p1_x_cond = runif(1, -parameter_range, parameter_range)
+  beta_pparameter_range_is_V = runif(1, -parameter_range, parameter_range)
+  beta_p1_x_pparameter_range = runif(1, -parameter_range, parameter_range)
   betas = c(intercept, beta_p1, beta_cond, beta_p2_is_V, beta_p1_x_cond, beta_p1_x_p2)
   beta_names = c("(Intercept)", "parameter_1", "conditionB", "parameter_2V", "parameter_1:conditionB", "parameter_1:parameter_2V")
   
