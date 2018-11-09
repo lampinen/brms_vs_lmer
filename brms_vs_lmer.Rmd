@@ -49,11 +49,10 @@ for (run in 1:num_runs) {
   
   intercept = runif(1, -parameter_range, parameter_range)
   beta_p1 = runif(1, -parameter_range, parameter_range)
-  beta_p2_is_V = runif(1, -parameter_range, parameter_range)
   beta_cond= runif(1, -parameter_range, parameter_range)
   beta_p1_x_cond = runif(1, -parameter_range, parameter_range)
-  beta_pparameter_range_is_V = runif(1, -parameter_range, parameter_range)
-  beta_p1_x_pparameter_range = runif(1, -parameter_range, parameter_range)
+  beta_p2_is_V = runif(1, -parameter_range, parameter_range)
+  beta_p1_x_p2 = runif(1, -parameter_range, parameter_range)
   betas = c(intercept, beta_p1, beta_cond, beta_p2_is_V, beta_p1_x_cond, beta_p1_x_p2)
   beta_names = c("(Intercept)", "parameter_1", "conditionB", "parameter_2V", "parameter_1:conditionB", "parameter_1:parameter_2V")
   
