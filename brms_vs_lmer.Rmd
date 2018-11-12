@@ -15,7 +15,7 @@ library(Hmisc)
 ```{r}
 num_runs = 50
 num_subjects = 100
-parameter_range = 2
+parameter_range = 3
 noise_and_RE_sd = 0.5
 ```
 
